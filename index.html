@@ -126,6 +126,7 @@ textarea{width:100%;min-height:84px;padding:12px;border:2px solid var(--line);bo
 .note{font-size:.86rem;color:#6d5443}
 
 /* 선생님 */
+#s-teacher .wrap{max-width:1120px}
 .t-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0}
 .t-bar select{padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:#fff}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
@@ -139,6 +140,11 @@ th{background:#f3e4c6;font-weight:700;position:sticky;top:0}
 td.wrap-cell{white-space:normal;min-width:180px}
 .mini{display:flex;align-items:center;gap:8px;min-width:150px}
 .mini .track{flex:1;height:12px}
+.dist{display:flex;width:130px;height:14px;border-radius:7px;overflow:hidden;background:#eadcc2}
+.dist i{display:block;height:100%}.dist .o,.lg-o{background:var(--ok)}.dist .p,.lg-p{background:var(--part)}.dist .x,.lg-x{background:var(--bad)}
+.lg{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 3px 0 8px;vertical-align:0}
+td.num{font-variant-numeric:tabular-nums;font-weight:700}td.num small{font-weight:400;color:#6d5443}
+td.ok{color:#3d5e22}td.bad{color:var(--bad)}
 .flag{font-size:.78rem;font-weight:700;padding:2px 7px;border-radius:6px}
 .flag.hard{background:#f5d3da;color:#7d1f33}.flag.easy{background:#e3edd6;color:#3d5e22}
 .demo{background:var(--butter-soft);border-radius:12px;padding:10px 14px;font-size:.9rem;margin:12px 0}
@@ -244,7 +250,7 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
    설정: 배포할 때 여기만 고치면 됩니다
    ========================================================= */
 const CONFIG = {
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyg47PGPpJemtRQIYKY6iYDEkcQKsaVjszpnQnmrxQ8s6D5iaolrOaYDnBrRBWtrU6_/exec',                 // 구글 Apps Script 웹 앱 주소 (비워 두면 미리보기 모드)
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyg47……/exec',                 // 구글 Apps Script 웹 앱 주소 (비워 두면 미리보기 모드)
   classes: [1,2,3,4,5,6,7,8,9],     // 수업하는 반
   examTitle: '2학기 1차 국어',
   storageKey: 'bbang-odap-2026-2-1',
@@ -584,20 +590,24 @@ function drawTeacher(){
   const reasonTot={}; analyses.forEach(({A})=>Object.entries(A.lostBy).forEach(([k,v])=>reasonTot[k]=(reasonTot[k]||0)+v));
   const reasonSorted=Object.entries(reasonTot).sort((a,b)=>b[1]-a[1]);
   const itemStats=ALL.map(i=>{
-    let got=0; const rc={}; let shaky=0;
+    let got=0, o=0, pp=0, x=0; const rc={}; let shaky=0;
     rows.forEach(r=>{const a=r.items[i.id]||{s:'x',r:[]}; got+=a.s==='o'?1:a.s==='p'?.5:0; if(a.c)shaky++;
+      if(a.s==='o')o++; else if(a.s==='p')pp++; else x++;
       if(a.s!=='o')(a.r||[]).forEach(k=>rc[k]=(rc[k]||0)+1)});
     const rate=got/n, gap=rate-EXPECT[i.diff];
     const mainR=Object.entries(rc).sort((a,b)=>b[1]-a[1])[0];
-    return {...i,rate,gap,mainR,shaky};
+    return {...i,rate,gap,mainR,shaky,o,pp,x,okR:o/n,partR:pp/n,badR:x/n};
   });
-  const worst=[...itemStats].sort((a,b)=>a.rate-b.rate)[0];
+  const worst=[...itemStats].sort((a,b)=>b.badR-a.badR||a.rate-b.rate)[0];
+  const sortBy=T.sort||'no';
+  const shown=sortBy==='bad'?[...itemStats].sort((a,b)=>b.badR-a.badR||b.partR-a.partR):sortBy==='ok'?[...itemStats].sort((a,b)=>b.okR-a.okR):itemStats;
+  T.lastItems=itemStats; T.lastN=n;
     $('#tBody').innerHTML=`
     <div class="stats">
       <div class="stat"><span>제출 인원</span><b>${n}명</b></div>
       <div class="stat"><span>평균 예상 점수</span><b>${r1(avg)}점</b></div>
       <div class="stat"><span>가장 많이 잃은 이유</span><b>${reasonSorted[0]?REASONS[reasonSorted[0][0]].short:'없음'}</b></div>
-      <div class="stat"><span>정답률 가장 낮은 문항</span><b>${worst.id} (${Math.round(worst.rate*100)}%)</b></div>
+      <div class="stat"><span>오답률 가장 높은 문항</span><b>${worst.id} (${Math.round(worst.badR*100)}%)</b></div>
     </div>
 
     <section class="section"><h3>잃은 점수, 어디서 나왔나 (학생 1인 평균)</h3>
@@ -606,12 +616,20 @@ function drawTeacher(){
     </section>
 
     <section class="section"><h3>문항별 분석</h3>
-      <p class="note">정답률은 맞음 1, 부분 0.5로 계산했어요. 예상 대비는 난이도별 기대 정답률(하 80%, 중 60%, 상 40%, 난이도는 대문항 총점 기준)과 15%p 이상 차이 날 때 표시해요.</p>
+      <div class="t-bar"><select id="tSort" aria-label="정렬">
+        <option value="no"${sortBy==='no'?' selected':''}>문항 순서대로</option>
+        <option value="bad"${sortBy==='bad'?' selected':''}>오답률 높은 순</option>
+        <option value="ok"${sortBy==='ok'?' selected':''}>정답률 높은 순</option></select>
+        <button class="btn ghost" id="tCsvItem">문항별 통계 CSV</button></div>
+      <p class="note">정답률은 맞음, 오답률은 틀림, 부분은 부분 점수를 받은 학생 비율이에요. <span class="lg lg-o"></span>맞음 <span class="lg lg-p"></span>부분 <span class="lg lg-x"></span>틀림</p>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>문항</th><th>내용</th><th>배점</th><th>난이도</th><th>정답률</th><th>예상 대비</th><th>주된 오답 이유</th><th>헷갈림</th></tr></thead>
-        <tbody>${itemStats.map(s=>`<tr><td><b>${s.id}</b></td><td>${esc(s.label)}</td><td>${s.pts}</td>
+        <thead><tr><th>문항</th><th>내용</th><th>배점</th><th>난이도</th><th>결과 분포</th><th>정답률</th><th>부분</th><th>오답률</th><th>예상 대비</th><th>주된 오답 이유</th><th>헷갈림</th></tr></thead>
+        <tbody>${shown.map(s=>`<tr><td><b>${s.id}</b></td><td>${esc(s.label)}</td><td>${s.pts}</td>
           <td><span class="diff d-${s.diff}">${DIFF[s.diff]}</span></td>
-          <td><div class="mini"><div class="track"><div class="fill" style="width:${s.rate*100}%"></div></div>${Math.round(s.rate*100)}%</div></td>
+          <td><div class="dist"><i class="o" style="width:${s.okR*100}%"></i><i class="p" style="width:${s.partR*100}%"></i><i class="x" style="width:${s.badR*100}%"></i></div></td>
+          <td class="num ok">${Math.round(s.okR*100)}% <small>(${s.o}명)</small></td>
+          <td class="num">${Math.round(s.partR*100)}% <small>(${s.pp}명)</small></td>
+          <td class="num bad">${Math.round(s.badR*100)}% <small>(${s.x}명)</small></td>
           <td>${s.gap<=-.15?'<span class="flag hard">예상보다 어려움</span>':s.gap>=.15?'<span class="flag easy">예상보다 쉬움</span>':''}</td>
           <td>${s.mainR?`${REASONS[s.mainR[0]].short} (${s.mainR[1]}명)`:''}</td><td>${s.shaky||''}</td></tr>`).join('')}</tbody>
       </table></div>
@@ -626,6 +644,20 @@ function drawTeacher(){
           <td class="wrap-cell">${esc(r.goal)}</td><td class="wrap-cell">${esc(r.msg)}</td></tr>`).join('')}</tbody>
       </table></div>
     </section>`;
+  $('#tSort').onchange=e=>{T.sort=e.target.value;drawTeacher()};
+  $('#tCsvItem').onclick=csvItems;
+}
+function csvItems(){
+  const st=T.lastItems||[], n=T.lastN||0;
+  const lines=[['문항','내용','배점','난이도','맞음(명)','부분(명)','틀림(명)','정답률(%)','부분(%)','오답률(%)','주된 오답 이유','헷갈림(명)'],
+    ...st.map(s=>[s.id,s.label,s.pts,DIFF[s.diff],s.o,s.pp,s.x,Math.round(s.okR*100),Math.round(s.partR*100),Math.round(s.badR*100),s.mainR?REASONS[s.mainR[0]].short:'',s.shaky])];
+  lines.push([]); lines.push(['제출 인원',n]);
+  download(lines,'odap_items.csv');
+}
+function download(lines,name){
+  const text='\uFEFF'+lines.map(l=>l.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));
+  a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 function csv(){
   const rows=filtered();
