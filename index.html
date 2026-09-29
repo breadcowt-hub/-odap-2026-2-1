@@ -157,8 +157,20 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
 @media(prefers-reduced-motion:no-preference){
   .big-loaf .bar div{transition:flex-basis .8s ease}
 }
+.shot-only{display:none}
+.capturing .shot-only{display:inline}
+.capturing .no-shot{display:none!important}
+.capturing{padding-bottom:24px}
+.shot-btn{margin-top:12px;padding:10px 18px;font-size:.95rem}
+.shot{position:fixed;inset:0;z-index:50;background:rgba(46,28,18,.6);display:flex;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.shot[hidden]{display:none!important}
+.shot-in{background:var(--dough);border-radius:18px;padding:18px;width:100%;max-width:520px;max-height:100%;display:flex;flex-direction:column}
+.shot-in h3{color:var(--crust);margin-bottom:10px}
+.shot-view{overflow:auto;flex:1 1 auto;min-height:0;border:2px solid var(--line);border-radius:12px;background:#fff}
+.shot-view img{display:block;width:100%;height:auto}
+.shot-in .actions{margin:12px 0 0}
 .pie-wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
-.pie{width:170px;height:170px;border-radius:50%;flex:0 0 auto;border:4px solid var(--crust);box-shadow:inset 0 0 0 3px rgba(255,255,255,.35)}
+.pie{width:170px;height:170px;flex:0 0 auto;display:block}
 .score-line{margin:0;font-size:1rem}
 .score-line strong{font-family:var(--head);font-weight:400;font-size:2rem;color:var(--crust)}
 .legend.col{flex-direction:column}
@@ -180,7 +192,7 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
 .nb-head small{color:var(--bad);font-weight:700}
 .nb-steps{margin:0;padding-left:1.3em;line-height:2}
 .nb-steps b{display:inline-block;min-width:4.6em;margin-right:6px;color:var(--crust)}
-.given{background:var(--butter-soft);padding:1px 6px;border-radius:5px}
+.given{display:inline-block;max-width:100%;background:var(--butter-soft);padding:0 6px;border-radius:5px;line-height:1.7}
 .sub{font-family:var(--head);font-weight:400;font-size:1.15rem;color:var(--crust);margin:22px 0 6px}
 .sub .cnt{background:var(--bad);color:#fff;border-radius:999px;padding:1px 10px;font-size:.9rem;font-family:var(--body);font-weight:700;margin-left:4px}
 .sub .ex{background:var(--butter);color:var(--ink);border-radius:6px;padding:1px 8px;font-size:.85rem;font-family:var(--body);font-weight:700;margin-left:4px}
@@ -253,6 +265,15 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
   </div>
 </main>
 
+<div id="shot" class="shot" hidden role="dialog" aria-modal="true" aria-label="결과 이미지">
+  <div class="shot-in">
+    <h3>이미지가 만들어졌어요!</h3>
+    <div class="shot-view"><img id="shotImg" alt="내 오답 분석 결과 이미지"></div>
+    <p class="note">휴대폰은 이미지를 <b>길게 눌러</b> "사진에 저장"을 눌러도 돼요.</p>
+    <div class="actions"><a class="btn butter" id="shotDl">이미지 내려받기</a><button class="btn ghost" id="shotClose">닫기</button></div>
+  </div>
+</div>
+
 <footer><div class="wrap">빵쌤 국어 오답 반죽실 <button id="toTeacher">선생님 화면</button></div></footer>
 
 <script>
@@ -260,8 +281,8 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
    설정: 배포할 때 여기만 고치면 됩니다
    ========================================================= */
 const CONFIG = {
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyg47PGPpJemtRQIYKY6iYDEkcQKsaVjszpnQnmrxQ8s6D5iaolrOaYDnBrRBWtrU6_/exec',                 // 구글 Apps Script 웹 앱 주소 (비워 두면 미리보기 모드)
-  classes: [1,2,3,4,5,6,7,8,9],     // 수업하는 반
+  SCRIPT_URL: '',                 // 구글 Apps Script 웹 앱 주소 (비워 두면 미리보기 모드)
+  classes: [1,2,3,4,5,6,7,8],     // 수업하는 반
   examTitle: '2학기 1차 국어',
   storageKey: 'bbang-odap-2026-2-1',
   noteCount: 0                    // 오답노트 문항 수 (0이면 틀림, 부분 문항 전부)
@@ -442,9 +463,16 @@ function analyze(answers){
 
 /* ===== 3. 결과 ===== */
 function pie(parts,label){
-  const tot=parts.reduce((a,p)=>a+p.v,0)||1; let acc=0;
-  const stops=parts.filter(p=>p.v>0).map(p=>{const s=acc/tot*360; acc+=p.v; return `${p.color} ${s}deg ${acc/tot*360}deg`});
-  return `<div class="pie" role="img" aria-label="${esc(label)}" style="background:conic-gradient(${stops.join(',')||'#eadcc2 0deg 360deg'})"></div>`;
+  const segs=parts.filter(p=>p.v>0), tot=segs.reduce((a,p)=>a+p.v,0);
+  const open=`<svg class="pie" viewBox="0 0 100 100" role="img" aria-label="${esc(label)}">`;
+  const ring='<circle cx="50" cy="50" r="48.5" fill="none" stroke="#5A3420" stroke-width="3"/>';
+  if(!segs.length) return open+'<circle cx="50" cy="50" r="48.5" fill="#eadcc2"/>'+ring+'</svg>';
+  if(segs.length===1) return open+`<circle cx="50" cy="50" r="48.5" fill="#${segs[0].color.replace('#','')}"/>`+ring+'</svg>';
+  let acc=0;
+  const pt=a=>[50+48.5*Math.cos(a),50+48.5*Math.sin(a)].map(v=>v.toFixed(3)).join(' ');
+  const paths=segs.map(p=>{const a0=acc/tot*2*Math.PI-Math.PI/2; acc+=p.v; const a1=acc/tot*2*Math.PI-Math.PI/2;
+    return `<path d="M50 50 L${pt(a0)} A48.5 48.5 0 ${a1-a0>Math.PI?1:0} 1 ${pt(a1)} Z" fill="#${p.color.replace('#','')}" stroke="#FFFBF1" stroke-width=".6"/>`}).join('');
+  return open+paths+'<circle cx="50" cy="50" r="48.5" fill="none" stroke="#5A3420" stroke-width="3"/></svg>';
 }
 const ORDER=Object.fromEntries(ALL.map((i,k)=>[i.id,k]));
 function pickNotes(R){
@@ -470,7 +498,8 @@ function renderResult(){
   const firstFix = top3[0] ? REASONS[top3[0][0]].action : '헷갈린 문항 다시 확인하기';
 
   $('#resultBox').innerHTML=`
-  <section class="res-head"><h2>${esc(state.name)}의 오답 레시피</h2><p class="note">${state.cls}반 ${state.num}번</p></section>
+  <section class="res-head"><h2>${esc(state.name)}의 오답 레시피</h2><p class="note">${state.cls}반 ${state.num}번 <span class="shot-only">· ${CONFIG.examTitle} · ${new Date().toLocaleDateString('ko-KR')} 저장</span></p>
+    <button class="btn butter shot-btn no-shot" data-shot>📷 내 결과 이미지로 저장</button></section>
 
   <section class="section pie-wrap">
     ${pie(parts,`얻은 점수 ${r1(R.score)}점, 잃은 점수 ${r1(R.lost)}점`)}
@@ -519,7 +548,7 @@ function renderResult(){
     <ul class="todo">
       ${notes.map(i=>`<li><label><input type="checkbox" data-note="${i.id}" ${state.noteDone[i.id]?'checked':''}>
         <span><b>${i.id}</b> ${esc(i.label)} <span class="tag ${i.s==='p'?'p':'x'}">${i.s==='p'?'부분':'틀림'}</span></span></label>
-        <div class="todo-sub">이유: <span class="given">${esc(noteWhy(i))}</span>${i.m?` <span class="given">"${esc(i.m)}"</span>`:''}<br>다음에 고려할 점: <span class="given">${esc(noteNext(i))}</span></div></li>`).join('')}
+        <div class="todo-sub"><div>이유: <span class="given">${esc(noteWhy(i))}</span>${i.m?` <span class="given">"${esc(i.m)}"</span>`:''}</div><div>다음에 고려할 점: <span class="given">${esc(noteNext(i))}</span></div></div></li>`).join('')}
     </ul>
     <p class="todo-count" id="noteProg"></p>
     ${R.shaky.length?`<p class="note">시간이 남으면: 맞았지만 헷갈렸던 ${R.shaky.map(i=>i.id).join(', ')}번도 "왜 정답인지" 한 줄로 써 보세요.</p>`:''}`
@@ -528,10 +557,11 @@ function renderResult(){
 
   <section class="section"><h3>다음 시험 나의 다짐</h3>
     <textarea id="goal" maxlength="300" placeholder="예: 서술형은 조건에 번호 붙이고 다 쓴 뒤 체크하기">${esc(state.goal)}</textarea>
-    <h3 style="margin-top:20px;font-size:1.1rem">선생님께 하고 싶은 말 (선택)</h3>
-    <textarea id="msg" maxlength="300" placeholder="어려웠던 점이나 궁금한 점">${esc(state.msg)}</textarea>
+    <h3 class="no-shot" style="margin-top:20px;font-size:1.1rem">선생님께 하고 싶은 말 (선택)</h3>
+    <textarea class="no-shot" id="msg" maxlength="300" placeholder="어려웠던 점이나 궁금한 점">${esc(state.msg)}</textarea>
     <p class="err" id="subErr"></p>
-    <div class="actions">
+    <div class="actions no-shot">
+      <button class="btn ghost" data-shot>📷 이미지로 저장</button>
       <button class="btn butter" id="submitBtn">${state.submitted?'다시 제출하기':'선생님께 제출하기'}</button>
       <button class="btn ghost" id="backCheck">체크 고치기</button>
       <button class="btn ghost" id="resetAll">처음부터 다시</button>
@@ -545,7 +575,39 @@ function renderResult(){
   $('#backCheck').onclick=()=>{renderCheck();show('s-check')};
   $('#resetAll').onclick=()=>{if(confirm('체크한 내용을 모두 지울까요?')){state=blank();save();$('#inNum').value='';$('#inCls').value='';$('#inName').value='';$('#resumeHint').hidden=true;show('s-info')}};
   $('#submitBtn').onclick=()=>submit(R,notes);
+  $('#resultBox').querySelectorAll('[data-shot]').forEach(b=>b.onclick=()=>saveImage(b));
 }
+
+/* 결과 이미지 저장 */
+function loadH2C(){
+  if(window.html2canvas) return Promise.resolve();
+  return new Promise((res,rej)=>{const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)});
+}
+let shotURL=null;
+async function saveImage(btn){
+  const old=btn.textContent, box=$('#resultBox');
+  btn.disabled=true; btn.textContent='이미지 만드는 중...';
+  try{
+    await loadH2C();
+    box.classList.add('capturing');
+    const w=box.scrollWidth, h=box.scrollHeight;
+    let scale=Math.min(2,window.devicePixelRatio||1);
+    while(w*h*scale*scale>14e6 && scale>0.6) scale-=0.2;
+    const canvas=await html2canvas(box,{backgroundColor:'#FFF4DC',scale,useCORS:true,windowWidth:document.documentElement.clientWidth});
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(shotURL) URL.revokeObjectURL(shotURL);
+    shotURL=URL.createObjectURL(blob);
+    $('#shotImg').src=shotURL;
+    const dl=$('#shotDl'); dl.href=shotURL; dl.download=`odap_${state.cls}-${state.num}.png`;
+    $('#shot').hidden=false;
+  }catch(e){
+    alert('이미지를 만들지 못했어요. 인터넷 연결을 확인하거나, 화면 캡처로 저장해 주세요.');
+  }finally{
+    box.classList.remove('capturing'); btn.disabled=false; btn.textContent=old;
+  }
+}
+$('#shotClose').onclick=()=>{$('#shot').hidden=true};
 
 /* 제출 */
 async function submit(R,notes){
