@@ -118,7 +118,7 @@ h1,h2,h3{font-family:var(--head);font-weight:400;line-height:1.25;margin:0}
 .weak p{margin:.4em 0 0}
 .review{list-style:none;padding:0;margin:0}
 .review li{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px dashed var(--line)}
-.tag{flex:0 0 auto;font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:6px;color:#fff;margin-top:2px}
+.tag{white-space:nowrap;display:inline-block;flex:0 0 auto;font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:6px;color:#fff;margin-top:2px}
 .tag.x{background:var(--bad)}.tag.p{background:var(--part)}.tag.c{background:#8a7a5f}
 .review small{display:block;color:#6d5443}
 textarea{width:100%;min-height:84px;padding:12px;border:2px solid var(--line);border-radius:12px;background:#fff;font-size:1rem;resize:vertical}
@@ -181,6 +181,16 @@ footer button{background:none;border:none;text-decoration:underline;color:inheri
 .nb-steps{margin:0;padding-left:1.3em;line-height:2}
 .nb-steps b{display:inline-block;min-width:4.6em;margin-right:6px;color:var(--crust)}
 .given{background:var(--butter-soft);padding:1px 6px;border-radius:5px}
+.sub{font-family:var(--head);font-weight:400;font-size:1.15rem;color:var(--crust);margin:22px 0 6px}
+.sub .cnt{background:var(--bad);color:#fff;border-radius:999px;padding:1px 10px;font-size:.9rem;font-family:var(--body);font-weight:700;margin-left:4px}
+.sub .ex{background:var(--butter);color:var(--ink);border-radius:6px;padding:1px 8px;font-size:.85rem;font-family:var(--body);font-weight:700;margin-left:4px}
+.todo{list-style:none;padding:0;margin:8px 0 0}
+.todo li{background:var(--flour);border:2px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+.todo label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.todo input{width:22px;height:22px;flex:0 0 auto;margin-top:2px;accent-color:var(--crust)}
+.todo li:has(input:checked){opacity:.55}
+.todo-sub{font-size:.88rem;margin:6px 0 0 32px;line-height:1.9}
+.todo-count{font-weight:700;color:var(--crust)}
 .nb-done{display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:700}
 .nb-done input{width:20px;height:20px;accent-color:var(--crust)}
 @media(max-width:520px){.pie{width:140px;height:140px}.pie-wrap{justify-content:center}}
@@ -254,7 +264,7 @@ const CONFIG = {
   classes: [1,2,3,4,5,6,7,8,9],     // 수업하는 반
   examTitle: '2학기 1차 국어',
   storageKey: 'bbang-odap-2026-2-1',
-  noteCount: 3                    // 오답노트에 쓸 문항 수
+  noteCount: 0                    // 오답노트 문항 수 (0이면 틀림, 부분 문항 전부)
 };
 
 /* 문항 정보: 문제 원문과 정답은 넣지 않습니다 (공개 페이지이므로) */
@@ -436,11 +446,14 @@ function pie(parts,label){
   const stops=parts.filter(p=>p.v>0).map(p=>{const s=acc/tot*360; acc+=p.v; return `${p.color} ${s}deg ${acc/tot*360}deg`});
   return `<div class="pie" role="img" aria-label="${esc(label)}" style="background:conic-gradient(${stops.join(',')||'#eadcc2 0deg 360deg'})"></div>`;
 }
+const ORDER=Object.fromEntries(ALL.map((i,k)=>[i.id,k]));
 function pickNotes(R){
-  const n=R.review.slice(0,CONFIG.noteCount).map(i=>({...i}));
-  R.shaky.slice(0,Math.max(0,CONFIG.noteCount-n.length)).forEach(i=>n.push({...i,s:'c',r:[],lost:0,m:''}));
-  return n;
+  let n=R.review.map(i=>({...i}));
+  if(CONFIG.noteCount>0) n=n.slice(0,CONFIG.noteCount);
+  return n.sort((a,b)=>ORDER[a.id]-ORDER[b.id]);
 }
+function noteWhy(i){return i.r.map(k=>REASONS[k].short).join(', ')}
+function noteNext(i){return (REASONS[i.r[0]]||{}).action||''}
 function scoreTable(title,obj,labels){
   return `<div class="mini-tbl"><h4>${title}</h4>${Object.keys(labels).map(k=>`<div class="mt-row"><span>${labels[k]}</span><b>${r1(obj[k].got)} <small>/ ${obj[k].tot}점</small></b></div>`).join('')}</div>`;
 }
@@ -489,21 +502,28 @@ function renderResult(){
       <p>공책 맨 위에 이렇게 쓰고 시작해요.</p>
       <div class="nb-line">📅 날짜 &nbsp; ${state.cls}반 ${state.num}번 ${esc(state.name)} &nbsp; 예상 점수 ${r1(R.score)}점</div>
       <div class="nb-line">⭐ 나의 고칠 점 1순위: ${esc(firstFix)}</div>
-      <p>그리고 아래 ${notes.length}문항을 하나씩, 번호 순서대로 공책에 적어요.</p>
     </div>
-    ${notes.map(i=>{const tag=i.s==='x'?['x','틀림']:i.s==='p'?['p','부분']:['c','헷갈림'];
-      const why=i.s==='c'?'맞았지만 헷갈림':i.r.map(k=>REASONS[k].short).join(', ');
-      const next=i.s==='c'?'왜 정답인지 근거까지 알고 넘어가자':(REASONS[i.r[0]]||{}).action||'';
-      return `<div class="nb-card">
-      <div class="nb-head"><b>${i.id}</b> ${esc(i.label)} <span class="tag ${tag[0]}">${tag[1]}</span>${i.lost?` <small>−${r1(i.lost)}점</small>`:''}</div>
+
+    <h4 class="sub">① 이렇게 써요 <span class="ex">예시</span></h4>
+    ${(()=>{const i=notes[0];return `<div class="nb-card">
+      <div class="nb-head"><b>${i.id}</b> ${esc(i.label)} <span class="tag ${i.s==='p'?'p':'x'}">${i.s==='p'?'부분':'틀림'}</span> <small>−${r1(i.lost)}점</small></div>
       <ol class="nb-steps">
-        <li><b>틀린 이유</b> <span class="given">${esc(why)}</span>${i.m?` <span class="given">"${esc(i.m)}"</span>`:''}</li>
+        <li><b>틀린 이유</b> <span class="given">${esc(noteWhy(i))}</span>${i.m?` <span class="given">"${esc(i.m)}"</span>`:''}</li>
         <li><b>다시 쓰기</b> 풀이 시간에 배운 내용을 떠올리며 답을 다시 써 보기</li>
-        <li><b>다음에 고려할 점</b> <span class="given">${esc(next)}</span></li>
-      </ol>
-      <label class="nb-done"><input type="checkbox" data-note="${i.id}" ${state.noteDone[i.id]?'checked':''}> 공책에 다 썼어요</label>
-    </div>`}).join('')}`
-    :'<p>오답노트에 쓸 문항이 없어요. 대신 가장 어려웠던 문제의 풀이 과정을 공책에 정리해 봐요.</p>'}
+        <li><b>다음에 고려할 점</b> <span class="given">${esc(noteNext(i))}</span></li>
+      </ol></div>`})()}
+    <p class="note">다른 문항도 이 모양 그대로, 문항 번호와 세 칸을 써요.</p>
+
+    <h4 class="sub">② 공책에 쓸 문항 <span class="cnt">${notes.length}개</span></h4>
+    <p class="note">번호 순서대로 공책에 쓰고, 다 쓴 문항은 체크해요. 이유와 다음에 고려할 점은 그대로 옮겨 쓰면 돼요.</p>
+    <ul class="todo">
+      ${notes.map(i=>`<li><label><input type="checkbox" data-note="${i.id}" ${state.noteDone[i.id]?'checked':''}>
+        <span><b>${i.id}</b> ${esc(i.label)} <span class="tag ${i.s==='p'?'p':'x'}">${i.s==='p'?'부분':'틀림'}</span></span></label>
+        <div class="todo-sub">이유: <span class="given">${esc(noteWhy(i))}</span>${i.m?` <span class="given">"${esc(i.m)}"</span>`:''}<br>다음에 고려할 점: <span class="given">${esc(noteNext(i))}</span></div></li>`).join('')}
+    </ul>
+    <p class="todo-count" id="noteProg"></p>
+    ${R.shaky.length?`<p class="note">시간이 남으면: 맞았지만 헷갈렸던 ${R.shaky.map(i=>i.id).join(', ')}번도 "왜 정답인지" 한 줄로 써 보세요.</p>`:''}`
+    :`<p>틀리거나 부분 점수를 받은 문항이 없어요!${R.shaky.length?` 헷갈렸던 ${R.shaky.map(i=>i.id).join(', ')}번의 정답 근거를 공책에 한 줄씩 정리해 봐요.`:' 가장 어려웠던 문제의 풀이 과정을 공책에 정리해 봐요.'}</p>`}
   </section>
 
   <section class="section"><h3>다음 시험 나의 다짐</h3>
@@ -517,7 +537,9 @@ function renderResult(){
       <button class="btn ghost" id="resetAll">처음부터 다시</button>
     </div>
   </section>`;
-  $('#resultBox').querySelectorAll('[data-note]').forEach(cb=>cb.onchange=()=>{state.noteDone[cb.dataset.note]=cb.checked;save()});
+  const prog=()=>{const el=$('#noteProg'); if(!el) return; const d=notes.filter(n=>state.noteDone[n.id]).length; el.textContent=`${d} / ${notes.length} 문항 완료`+(d===notes.length?' 🎉 다 썼으면 아래에서 다시 제출해요!':'');};
+  $('#resultBox').querySelectorAll('[data-note]').forEach(cb=>cb.onchange=()=>{state.noteDone[cb.dataset.note]=cb.checked;save();prog()});
+  prog();
   $('#goal').oninput=e=>{state.goal=e.target.value;save()};
   $('#msg').oninput=e=>{state.msg=e.target.value;save()};
   $('#backCheck').onclick=()=>{renderCheck();show('s-check')};
@@ -528,7 +550,7 @@ function renderResult(){
 /* 제출 */
 async function submit(R,notes){
   const btn=$('#submitBtn'); btn.disabled=true; btn.textContent='보내는 중...';
-  const items={}; ALL.forEach(i=>{const a=state.answers[i.id]||{}; items[i.id]={s:a.s||'x',r:a.r||[],c:!!a.c,m:(a.m||'').slice(0,80)}});
+  const items={}; ALL.forEach(i=>{const a=state.answers[i.id]||{}; items[i.id]={s:a.s||'x',r:a.r||[],c:!!a.c,m:(a.m||'').slice(0,80),n:!!state.noteDone[i.id]}});
   const payload={cls:state.cls,num:state.num,name:state.name,score:r1(R.score),top:R.top.slice(0,2).map(([k])=>REASONS[k].short),goal:state.goal,msg:state.msg,items,
     notes:notes.map(n=>n.id),notesDone:notes.filter(n=>state.noteDone[n.id]).length};
   if(!CONFIG.SCRIPT_URL){
@@ -565,6 +587,12 @@ async function teacherLoad(){
     T={rows:latest(j.rows),demo:false,pw}; renderTeacher();
   }catch(e){$('#tErr').textContent=e.message||'불러오지 못했어요.'}
   $('#tLoginBtn').disabled=false; $('#tLoginBtn').textContent='결과 불러오기';
+}
+function noteInfo(r){
+  const ids=ALL.filter(i=>r.items[i.id]&&(r.items[i.id].s==='x'||r.items[i.id].s==='p')).map(i=>i.id);
+  const hasN=ids.some(id=>'n' in r.items[id]);
+  const done=hasN?ids.filter(id=>r.items[id].n).length:(r.notesDone||0);
+  return {ids,done};
 }
 function latest(rows){ // 같은 반·번호는 마지막 제출만
   const m={}; rows.forEach(r=>{m[r.cls+'-'+r.num]=r}); return Object.values(m).filter(r=>r.items&&typeof r.items==='object');
@@ -640,7 +668,7 @@ function drawTeacher(){
         <thead><tr><th>반</th><th>번호</th><th>이름</th><th>예상 점수</th><th>약점 1</th><th>약점 2</th><th>오답노트 문항</th><th>다짐</th><th>하고 싶은 말</th></tr></thead>
         <tbody>${analyses.sort((a,b)=>a.r.cls-b.r.cls||a.r.num-b.r.num).map(({r,A})=>`<tr><td>${esc(r.cls)}</td><td>${esc(r.num)}</td><td>${esc(r.name)}</td><td>${r1(A.score)}</td>
           <td>${A.top[0]?REASONS[A.top[0][0]].short:''}</td><td>${A.top[1]?REASONS[A.top[1][0]].short:''}</td>
-          <td>${esc((r.notes||[]).join(', '))}${r.notes&&r.notes.length?` <small>(${r.notesDone||0}/${r.notes.length} 완료)</small>`:''}</td>
+          <td class="wrap-cell">${(()=>{const ni=noteInfo(r);return ni.ids.length?`<b>${ni.done}/${ni.ids.length} 완료</b><br><small>${esc(ni.ids.join(', '))}</small>`:'없음'})()}</td>
           <td class="wrap-cell">${esc(r.goal)}</td><td class="wrap-cell">${esc(r.msg)}</td></tr>`).join('')}</tbody>
       </table></div>
     </section>`;
@@ -664,7 +692,7 @@ function csv(){
   const head=['반','번호','이름','예상점수','약점1','약점2','오답노트문항','다짐','하고싶은말',...ALL.map(i=>i.id)];
   const mark={o:'O',p:'△',x:'X'};
   const lines=[head,...rows.map(r=>{const A=analyze(r.items);
-    return [r.cls,r.num,r.name||'',r1(A.score),A.top[0]?REASONS[A.top[0][0]].short:'',A.top[1]?REASONS[A.top[1][0]].short:'',(r.notes||[]).join(' '),r.goal||'',r.msg||'',
+    return [r.cls,r.num,r.name||'',r1(A.score),A.top[0]?REASONS[A.top[0][0]].short:'',A.top[1]?REASONS[A.top[1][0]].short:'',noteInfo(r).ids.join(' '),r.goal||'',r.msg||'',
       ...ALL.map(i=>{const a=r.items[i.id]||{};return (mark[a.s]||'')+((a.r&&a.r.length)?' '+a.r.map(k=>REASONS[k].short).join('/'):'')})]})];
   const text='\uFEFF'+lines.map(l=>l.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));
@@ -680,7 +708,7 @@ function demoRows(){
       if(r<p) items[i.id]={s:'o',r:[],c:Math.random()<.15,m:''};
       else if(r<p+.15) items[i.id]={s:'p',r:[pick()],c:false,m:''};
       else items[i.id]={s:'x',r:Math.random()<.3?[pick(),pick()].filter((v,j,a)=>a.indexOf(v)===j):[pick()],c:false,m:''};});
-    const A0=analyze(items); const nt=pickNotes(A0).map(x=>x.id);
+    const A0=analyze(items); const nt=pickNotes(A0).map(x=>x.id); nt.forEach(id=>{if(Math.random()<.6)items[id].n=true});
     out.push({cls,num,name:'학생'+cls+'-'+num,items,notes:nt,notesDone:Math.floor(Math.random()*(nt.length+1)),goal:num%3?'':'서술형은 조건을 먼저 표시하고 풀기',msg:''});
   }});
   return out;
